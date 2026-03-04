@@ -1,18 +1,78 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  TextInput, KeyboardAvoidingView, Platform, ScrollView
+  TextInput, KeyboardAvoidingView, Platform,
+  ScrollView, ActivityIndicator
 } from 'react-native';
 import { router } from 'expo-router';
+import { supabase } from '../lib/supabase';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = () => {
-    router.replace('/(tabs)/home' as any);
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: '761418812154-qdv9ui1pn0lfonrcgmr30vtnv1eqp6t9.apps.googleusercontent.com',
+    webClientId: '761418812154-a396r4ingdofmg8j2hdt0ijiour0mcsf.apps.googleusercontent.com',
+  });
+
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { authentication } = response;
+      supabase.auth.signInWithIdToken({
+        provider: 'google',
+        token: authentication?.accessToken ?? '',
+      }).then(({ error }) => {
+        if (error) alert(error.message);
+        else router.replace('/(tabs)/home' as any);
+      });
+    }
+  }, [response]);
+
+  const handleGoogle = async () => {
+    await promptAsync();
+  };
+
+  const handleSubmit = async () => {
+    setError('');
+    setLoading(true);
+
+    try {
+      if (isLogin) {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        if (error) throw error;
+
+        if (data.user) {
+          await supabase.from('profiles').insert({
+            id: data.user.id,
+            name,
+            email,
+          });
+        }
+      }
+      router.replace('/(tabs)/home' as any);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -47,6 +107,13 @@ export default function LoginScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Error */}
+        {error ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>⚠️ {error}</Text>
+          </View>
+        ) : null}
 
         {/* Form */}
         <View style={styles.form}>
@@ -89,17 +156,26 @@ export default function LoginScreen() {
           </View>
 
           {isLogin && (
-            <TouchableOpacity style={styles.forgotBtn}>
+            <TouchableOpacity
+              style={styles.forgotBtn}
+              onPress={() => router.push('/forgot-password' as any)}>
               <Text style={styles.forgotText}>Forgot Password?</Text>
             </TouchableOpacity>
           )}
         </View>
 
         {/* Submit Button */}
-        <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-          <Text style={styles.submitText}>
-            {isLogin ? 'Login 🚀' : 'Create Account 🎉'}
-          </Text>
+        <TouchableOpacity
+          style={[styles.submitBtn, loading && { opacity: 0.7 }]}
+          onPress={handleSubmit}
+          disabled={loading}>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.submitText}>
+              {isLogin ? 'Login 🚀' : 'Create Account 🎉'}
+            </Text>
+          )}
         </TouchableOpacity>
 
         {/* Divider */}
@@ -111,7 +187,10 @@ export default function LoginScreen() {
 
         {/* Social Buttons */}
         <View style={styles.socialRow}>
-          <TouchableOpacity style={styles.socialBtn}>
+          <TouchableOpacity
+            style={styles.socialBtn}
+            onPress={handleGoogle}
+            disabled={!request}>
             <Text style={styles.socialText}>🌐 Google</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.socialBtn}>
@@ -167,7 +246,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E1E2E',
     borderRadius: 12,
     padding: 4,
-    marginBottom: 32,
+    marginBottom: 24,
   },
   toggleBtn: {
     flex: 1,
@@ -185,6 +264,18 @@ const styles = StyleSheet.create({
   },
   toggleTextActive: {
     color: '#fff',
+  },
+  errorBox: {
+    backgroundColor: '#FF658420',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FF6584',
+  },
+  errorText: {
+    color: '#FF6584',
+    fontSize: 14,
   },
   form: {
     marginBottom: 24,

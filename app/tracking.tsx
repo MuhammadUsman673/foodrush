@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { router } from 'expo-router';
+import { supabase } from '../lib/supabase';
+import { useCart } from '../store';
 
 const steps = [
   { id: 1, icon: '✅', label: 'Order Confirmed', desc: 'Your order has been received' },
@@ -12,6 +14,23 @@ const steps = [
 export default function TrackingScreen() {
   const [currentStep, setCurrentStep] = useState(0);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const { items, totalPrice, clearCart } = useCart();
+
+  useEffect(() => {
+    saveOrder();
+  }, []);
+
+  const saveOrder = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    await supabase.from('orders').insert({
+      user_id: user.id,
+      items: items,
+      total_price: totalPrice,
+      status: 'confirmed',
+    });
+  };
 
   useEffect(() => {
     Animated.loop(
@@ -94,7 +113,10 @@ export default function TrackingScreen() {
       {currentStep === steps.length - 1 && (
         <TouchableOpacity
           style={styles.doneBtn}
-          onPress={() => router.replace('/(tabs)/home' as any)}>
+          onPress={() => {
+            clearCart();
+            router.replace('/(tabs)/home' as any);
+          }}>
           <Text style={styles.doneBtnText}>Back to Home 🏠</Text>
         </TouchableOpacity>
       )}
