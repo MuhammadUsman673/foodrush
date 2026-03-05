@@ -8,7 +8,6 @@ import { router } from 'expo-router';
 
 export default function RootLayout() {
   useEffect(() => {
-    // Handle deep links
     const handleDeepLink = async (url: string) => {
       if (url.includes('reset-password')) {
         const params = Linking.parse(url);
@@ -27,12 +26,10 @@ export default function RootLayout() {
       }
     };
 
-    // Listen for deep links when app is open
     const subscription = Linking.addEventListener('url', ({ url }) => {
       handleDeepLink(url);
     });
 
-    // Handle deep link when app opens from closed state
     Linking.getInitialURL().then((url) => {
       if (url) handleDeepLink(url);
     });
@@ -52,6 +49,14 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="restaurant/[id]" />
           <Stack.Screen name="tracking" />
+          <Stack.Screen name="order-history" />
+          <Stack.Screen name="edit-profile" />
+          <Stack.Screen name="delivery-address" />
+          <Stack.Screen name="payment-methods" />
+          <Stack.Screen name="promo-codes" />
+          <Stack.Screen name="reviews" />
+          <Stack.Screen name="notifications" />
+          <Stack.Screen name="help-support" />
         </Stack>
       </CartProvider>
     </SafeAreaProvider>

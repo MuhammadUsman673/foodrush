@@ -1,81 +1,57 @@
+import { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity
+  TouchableOpacity, ActivityIndicator
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCart } from '../../store';
-
-const restaurantData: Record<string, any> = {
-  '1': {
-    name: 'Pizza Palace',
-    cuisine: 'Italian • Pizza',
-    rating: '4.8',
-    time: '20-30 min',
-    emoji: '🍕',
-    color: '#FF6584',
-    menu: [
-      { id: 'r1m1', name: 'Margherita Pizza', desc: 'Classic tomato & mozzarella', price: 12.99, emoji: '🍕' },
-      { id: 'r1m2', name: 'Pepperoni Pizza', desc: 'Loaded with pepperoni', price: 14.99, emoji: '🍕' },
-      { id: 'r1m3', name: 'BBQ Chicken Pizza', desc: 'Smoky BBQ with chicken', price: 15.99, emoji: '🍕' },
-      { id: 'r1m4', name: 'Garlic Bread', desc: 'Crispy with garlic butter', price: 4.99, emoji: '🥖' },
-      { id: 'r1m5', name: 'Caesar Salad', desc: 'Fresh romaine with dressing', price: 7.99, emoji: '🥗' },
-    ],
-  },
-  '2': {
-    name: 'Burger Barn',
-    cuisine: 'American • Burgers',
-    rating: '4.6',
-    time: '15-25 min',
-    emoji: '🍔',
-    color: '#6C63FF',
-    menu: [
-      { id: 'r2m1', name: 'Classic Burger', desc: 'Beef patty with lettuce & tomato', price: 9.99, emoji: '🍔' },
-      { id: 'r2m2', name: 'Cheese Burger', desc: 'Double cheese smash burger', price: 11.99, emoji: '🍔' },
-      { id: 'r2m3', name: 'Crispy Chicken', desc: 'Fried chicken fillet burger', price: 10.99, emoji: '🍗' },
-      { id: 'r2m4', name: 'Fries', desc: 'Golden crispy fries', price: 3.99, emoji: '🍟' },
-      { id: 'r2m5', name: 'Milkshake', desc: 'Chocolate or vanilla', price: 5.99, emoji: '🥤' },
-    ],
-  },
-  '3': {
-    name: 'Sushi Star',
-    cuisine: 'Japanese • Sushi',
-    rating: '4.9',
-    time: '25-35 min',
-    emoji: '🍱',
-    color: '#43C6AC',
-    menu: [
-      { id: 'r3m1', name: 'Salmon Roll', desc: '8 pieces of fresh salmon', price: 13.99, emoji: '🍣' },
-      { id: 'r3m2', name: 'Tuna Sashimi', desc: '6 slices of premium tuna', price: 15.99, emoji: '🍣' },
-      { id: 'r3m3', name: 'Dragon Roll', desc: 'Avocado topped shrimp roll', price: 16.99, emoji: '🍱' },
-      { id: 'r3m4', name: 'Miso Soup', desc: 'Traditional Japanese soup', price: 3.99, emoji: '🍜' },
-      { id: 'r3m5', name: 'Edamame', desc: 'Steamed salted soybeans', price: 4.99, emoji: '🫘' },
-    ],
-  },
-  '4': {
-    name: 'Taco Town',
-    cuisine: 'Mexican • Tacos',
-    rating: '4.7',
-    time: '10-20 min',
-    emoji: '🌮',
-    color: '#FFB347',
-    menu: [
-      { id: 'r4m1', name: 'Beef Tacos', desc: '3 tacos with seasoned beef', price: 9.99, emoji: '🌮' },
-      { id: 'r4m2', name: 'Chicken Burrito', desc: 'Grilled chicken with rice & beans', price: 11.99, emoji: '🌯' },
-      { id: 'r4m3', name: 'Nachos', desc: 'Loaded with cheese & jalapeños', price: 8.99, emoji: '🧀' },
-      { id: 'r4m4', name: 'Guacamole', desc: 'Fresh homemade guac with chips', price: 5.99, emoji: '🥑' },
-      { id: 'r4m5', name: 'Churros', desc: 'Crispy with cinnamon sugar', price: 4.99, emoji: '🍩' },
-    ],
-  },
-};
+import { supabase } from '../../lib/supabase';
 
 export default function RestaurantScreen() {
   const { id } = useLocalSearchParams();
-  const restaurant = restaurantData[id as string];
   const { addItem, totalItems } = useCart();
+  const [restaurant, setRestaurant] = useState<any>(null);
+  const [menu, setMenu] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadRestaurant();
+  }, [id]);
+
+  const loadRestaurant = async () => {
+    try {
+      const { data: restaurantData } = await supabase
+        .from('restaurants')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      setRestaurant(restaurantData);
+
+      const { data: menuData } = await supabase
+        .from('menu_items')
+        .select('*')
+        .eq('restaurant_id', id);
+
+      setMenu(menuData || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#6C63FF" />
+      </View>
+    );
+  }
 
   if (!restaurant) {
     return (
-      <View style={styles.container}>
+      <View style={styles.loadingContainer}>
         <Text style={{ color: '#fff' }}>Restaurant not found</Text>
       </View>
     );
@@ -97,6 +73,14 @@ export default function RestaurantScreen() {
           <Text style={styles.metaDot}>•</Text>
           <Text style={styles.metaText}>🛵 Free delivery</Text>
         </View>
+        <TouchableOpacity
+          style={styles.reviewsBtn}
+          onPress={() => router.push({
+            pathname: '/reviews',
+            params: { restaurantId: id, restaurantName: restaurant.name }
+          } as any)}>
+          <Text style={styles.reviewsBtnText}>⭐ See Reviews</Text>
+        </TouchableOpacity>
         {totalItems > 0 && (
           <TouchableOpacity
             style={styles.cartBadge}
@@ -108,14 +92,14 @@ export default function RestaurantScreen() {
 
       <View style={styles.menuContainer}>
         <Text style={styles.menuTitle}>Menu</Text>
-        {restaurant.menu.map((item: any) => (
+        {menu.map((item: any) => (
           <View key={item.id} style={styles.menuItem}>
             <View style={styles.menuItemLeft}>
               <Text style={styles.menuEmoji}>{item.emoji}</Text>
             </View>
             <View style={styles.menuItemInfo}>
               <Text style={styles.menuItemName}>{item.name}</Text>
-              <Text style={styles.menuItemDesc}>{item.desc}</Text>
+              <Text style={styles.menuItemDesc}>{item.description}</Text>
               <Text style={styles.menuItemPrice}>${item.price}</Text>
             </View>
             <TouchableOpacity
@@ -139,6 +123,7 @@ export default function RestaurantScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0F0F1A' },
+  loadingContainer: { flex: 1, backgroundColor: '#0F0F1A', alignItems: 'center', justifyContent: 'center' },
   header: { padding: 24, paddingTop: 60, alignItems: 'center' },
   backBtn: { alignSelf: 'flex-start', marginBottom: 16 },
   backText: { color: '#fff', fontSize: 16, fontWeight: '600' },
@@ -148,6 +133,8 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   metaText: { color: '#aaa', fontSize: 14 },
   metaDot: { color: '#555' },
+  reviewsBtn: { marginTop: 12, backgroundColor: '#1E1E2E', paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20 },
+  reviewsBtnText: { color: '#aaa', fontSize: 14, fontWeight: '600' },
   cartBadge: { marginTop: 16, backgroundColor: '#6C63FF', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 },
   cartBadgeText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
   menuContainer: { padding: 20 },

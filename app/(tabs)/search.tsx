@@ -1,45 +1,63 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput,
-  TouchableOpacity, ScrollView, FlatList
+  ScrollView, TouchableOpacity, ActivityIndicator
 } from 'react-native';
 import { router } from 'expo-router';
-
-const allItems = [
-  { id: '1', name: 'Pizza Palace', type: 'restaurant', emoji: '🍕', desc: 'Italian • Pizza', rating: '4.8' },
-  { id: '2', name: 'Burger Barn', type: 'restaurant', emoji: '🍔', desc: 'American • Burgers', rating: '4.6' },
-  { id: '3', name: 'Sushi Star', type: 'restaurant', emoji: '🍱', desc: 'Japanese • Sushi', rating: '4.9' },
-  { id: '4', name: 'Taco Town', type: 'restaurant', emoji: '🌮', desc: 'Mexican • Tacos', rating: '4.7' },
-  { id: '5', name: 'Margherita Pizza', type: 'food', emoji: '🍕', desc: 'Pizza Palace • $12.99', rating: '4.8' },
-  { id: '6', name: 'Cheese Burger', type: 'food', emoji: '🍔', desc: 'Burger Barn • $11.99', rating: '4.6' },
-  { id: '7', name: 'Salmon Roll', type: 'food', emoji: '🍣', desc: 'Sushi Star • $13.99', rating: '4.9' },
-  { id: '8', name: 'Beef Tacos', type: 'food', emoji: '🌮', desc: 'Taco Town • $9.99', rating: '4.7' },
-  { id: '9', name: 'Garlic Bread', type: 'food', emoji: '🥖', desc: 'Pizza Palace • $4.99', rating: '4.5' },
-  { id: '10', name: 'Milkshake', type: 'food', emoji: '🥤', desc: 'Burger Barn • $5.99', rating: '4.4' },
-];
-
-const popular = ['Pizza', 'Burger', 'Sushi', 'Tacos', 'Pasta', 'Dessert'];
+import { supabase } from '../../lib/supabase';
 
 export default function SearchScreen() {
   const [query, setQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState('All');
+  const [restaurants, setRestaurants] = useState<any[]>([]);
+  const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
 
-  const filters = ['All', 'Restaurants', 'Food'];
+  const popularSearches = ['Pizza', 'Burger', 'Sushi', 'Tacos', 'Chicken', 'Dessert'];
 
-  const results = allItems.filter((item) => {
-    const matchesQuery = item.name.toLowerCase().includes(query.toLowerCase());
-    const matchesFilter =
-      activeFilter === 'All' ||
-      (activeFilter === 'Restaurants' && item.type === 'restaurant') ||
-      (activeFilter === 'Food' && item.type === 'food');
-    return matchesQuery && matchesFilter;
-  });
+  const handleSearch = async (text: string) => {
+    setQuery(text);
+    if (text.length < 2) {
+      setRestaurants([]);
+      setMenuItems([]);
+      setSearched(false);
+      return;
+    }
+
+    setLoading(true);
+    setSearched(true);
+
+    try {
+      // Search restaurants
+      const { data: restaurantData } = await supabase
+        .from('restaurants')
+        .select('*')
+        .ilike('name', `%${text}%`);
+
+      // Search menu items
+      const { data: menuData } = await supabase
+        .from('menu_items')
+        .select('*, restaurants(id, name, emoji, color)')
+        .ilike('name', `%${text}%`);
+
+      setRestaurants(restaurantData || []);
+      setMenuItems(menuData || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalResults = restaurants.length + menuItems.length;
 
   return (
     <View style={styles.container}>
-
       {/* Header */}
-      <Text style={styles.title}>Search 🔍</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>Search 🔍</Text>
+        <Text style={styles.subtitle}>Find food or restaurants</Text>
+      </View>
 
       {/* Search Input */}
       <View style={styles.searchContainer}>
@@ -49,106 +67,108 @@ export default function SearchScreen() {
           placeholder="Search food or restaurant..."
           placeholderTextColor="#555"
           value={query}
-          onChangeText={setQuery}
+          onChangeText={handleSearch}
           autoFocus={false}
         />
         {query.length > 0 && (
-          <TouchableOpacity onPress={() => setQuery('')}>
+          <TouchableOpacity onPress={() => {
+            setQuery('');
+            setRestaurants([]);
+            setMenuItems([]);
+            setSearched(false);
+          }}>
             <Text style={styles.clearBtn}>✕</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Filters */}
-      <View style={styles.filtersRow}>
-        {filters.map((f) => (
-          <TouchableOpacity
-            key={f}
-            style={[styles.filterBtn, activeFilter === f && styles.filterBtnActive]}
-            onPress={() => setActiveFilter(f)}>
-            <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>
-              {f}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Popular searches when no query */}
-        {query.length === 0 && (
-          <View style={styles.popularContainer}>
+        {/* Popular Searches */}
+        {!searched && (
+          <>
             <Text style={styles.sectionTitle}>Popular Searches</Text>
             <View style={styles.tagsRow}>
-              {popular.map((tag) => (
+              {popularSearches.map((tag) => (
                 <TouchableOpacity
                   key={tag}
                   style={styles.tag}
-                  onPress={() => setQuery(tag)}>
+                  onPress={() => handleSearch(tag)}>
                   <Text style={styles.tagText}>{tag}</Text>
                 </TouchableOpacity>
               ))}
             </View>
+          </>
+        )}
 
-            <Text style={styles.sectionTitle}>All Restaurants</Text>
-            {allItems
-              .filter((i) => i.type === 'restaurant')
-              .map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.resultItem}
-                  onPress={() => router.push(`/restaurant/${item.id}` as any)}>
-                  <View style={styles.resultEmoji}>
-                    <Text style={{ fontSize: 28 }}>{item.emoji}</Text>
-                  </View>
-                  <View style={styles.resultInfo}>
-                    <Text style={styles.resultName}>{item.name}</Text>
-                    <Text style={styles.resultDesc}>{item.desc}</Text>
-                  </View>
-                  <Text style={styles.resultRating}>⭐ {item.rating}</Text>
-                </TouchableOpacity>
-              ))}
+        {/* Loading */}
+        {loading && (
+          <ActivityIndicator size="large" color="#6C63FF" style={{ marginTop: 40 }} />
+        )}
+
+        {/* No Results */}
+        {searched && !loading && totalResults === 0 && (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyEmoji}>🔍</Text>
+            <Text style={styles.emptyTitle}>No results found</Text>
+            <Text style={styles.emptySubtitle}>Try searching for something else</Text>
           </View>
         )}
 
-        {/* Search Results */}
-        {query.length > 0 && (
-          <View style={styles.resultsContainer}>
-            <Text style={styles.sectionTitle}>
-              {results.length} results for "{query}"
-            </Text>
-            {results.length === 0 ? (
-              <View style={styles.noResults}>
-                <Text style={styles.noResultsEmoji}>😕</Text>
-                <Text style={styles.noResultsText}>No results found</Text>
-                <Text style={styles.noResultsSubtext}>Try searching something else</Text>
-              </View>
-            ) : (
-              results.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.resultItem}
-                  onPress={() =>
-                    item.type === 'restaurant'
-                      ? router.push(`/restaurant/${item.id}` as any)
-                      : null
-                  }>
-                  <View style={styles.resultEmoji}>
-                    <Text style={{ fontSize: 28 }}>{item.emoji}</Text>
+        {/* Results Count */}
+        {searched && !loading && totalResults > 0 && (
+          <Text style={styles.resultsCount}>{totalResults} results for "{query}"</Text>
+        )}
+
+        {/* Restaurant Results */}
+        {restaurants.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Restaurants</Text>
+            {restaurants.map((r) => (
+              <TouchableOpacity
+                key={r.id}
+                style={styles.restaurantCard}
+                onPress={() => router.push(`/restaurant/${r.id}` as any)}>
+                <View style={[styles.restaurantImage, { backgroundColor: r.color + '33' }]}>
+                  <Text style={styles.restaurantEmoji}>{r.emoji}</Text>
+                </View>
+                <View style={styles.restaurantInfo}>
+                  <Text style={styles.restaurantName}>{r.name}</Text>
+                  <Text style={styles.restaurantCuisine}>{r.cuisine}</Text>
+                  <View style={styles.metaRow}>
+                    <Text style={styles.metaText}>⭐ {r.rating}</Text>
+                    <Text style={styles.metaDot}>•</Text>
+                    <Text style={styles.metaText}>🕐 {r.time}</Text>
                   </View>
-                  <View style={styles.resultInfo}>
-                    <Text style={styles.resultName}>{item.name}</Text>
-                    <Text style={styles.resultDesc}>{item.desc}</Text>
-                  </View>
-                  <View style={styles.resultRight}>
-                    <Text style={styles.resultType}>
-                      {item.type === 'restaurant' ? '🏪' : '🍽️'}
-                    </Text>
-                    <Text style={styles.resultRating}>⭐ {item.rating}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))
-            )}
-          </View>
+                </View>
+                <Text style={styles.arrow}>›</Text>
+              </TouchableOpacity>
+            ))}
+          </>
+        )}
+
+        {/* Menu Item Results */}
+        {menuItems.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Menu Items</Text>
+            {menuItems.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.menuCard}
+                onPress={() => router.push(`/restaurant/${item.restaurants?.id}` as any)}>
+                <View style={styles.menuItemLeft}>
+                  <Text style={styles.menuEmoji}>{item.emoji}</Text>
+                </View>
+                <View style={styles.menuItemInfo}>
+                  <Text style={styles.menuItemName}>{item.name}</Text>
+                  <Text style={styles.menuItemRestaurant}>
+                    {item.restaurants?.emoji} {item.restaurants?.name}
+                  </Text>
+                  <Text style={styles.menuItemPrice}>${item.price}</Text>
+                </View>
+                <Text style={styles.arrow}>›</Text>
+              </TouchableOpacity>
+            ))}
+          </>
         )}
 
         <View style={{ height: 40 }} />
@@ -164,11 +184,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
   },
+  header: {
+    marginBottom: 20,
+  },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 20,
+    marginBottom: 4,
+  },
+  subtitle: {
+    color: '#888',
+    fontSize: 15,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -176,7 +203,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E1E2E',
     borderRadius: 14,
     paddingHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 24,
     borderWidth: 1,
     borderColor: '#2E2E3E',
   },
@@ -195,34 +222,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     padding: 4,
   },
-  filtersRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-  },
-  filterBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#1E1E2E',
-    borderWidth: 1,
-    borderColor: '#2E2E3E',
-  },
-  filterBtnActive: {
-    backgroundColor: '#6C63FF',
-    borderColor: '#6C63FF',
-  },
-  filterText: {
-    color: '#888',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  filterTextActive: {
-    color: '#fff',
-  },
-  popularContainer: {
-    marginBottom: 20,
-  },
   sectionTitle: {
     color: '#fff',
     fontSize: 18,
@@ -238,7 +237,7 @@ const styles = StyleSheet.create({
   tag: {
     backgroundColor: '#1E1E2E',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#2E2E3E',
@@ -246,67 +245,117 @@ const styles = StyleSheet.create({
   tagText: {
     color: '#aaa',
     fontSize: 14,
+    fontWeight: '600',
   },
-  resultsContainer: {
-    marginBottom: 20,
+  emptyContainer: {
+    alignItems: 'center',
+    paddingTop: 60,
   },
-  resultItem: {
+  emptyEmoji: {
+    fontSize: 56,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    color: '#888',
+    fontSize: 15,
+  },
+  resultsCount: {
+    color: '#888',
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  restaurantCard: {
+    backgroundColor: '#1E1E2E',
+    borderRadius: 16,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E1E2E',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  resultEmoji: {
-    width: 52,
-    height: 52,
-    backgroundColor: '#2E2E3E',
-    borderRadius: 12,
+  restaurantImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
   },
-  resultInfo: {
+  restaurantEmoji: {
+    fontSize: 28,
+  },
+  restaurantInfo: {
     flex: 1,
   },
-  resultName: {
+  restaurantName: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  restaurantCuisine: {
+    color: '#888',
+    fontSize: 13,
+    marginBottom: 6,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  metaText: {
+    color: '#aaa',
+    fontSize: 13,
+  },
+  metaDot: {
+    color: '#555',
+  },
+  arrow: {
+    color: '#555',
+    fontSize: 24,
+  },
+  menuCard: {
+    backgroundColor: '#1E1E2E',
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  menuItemLeft: {
+    width: 56,
+    height: 56,
+    backgroundColor: '#2E2E3E',
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  menuEmoji: {
+    fontSize: 28,
+  },
+  menuItemInfo: {
+    flex: 1,
+  },
+  menuItemName: {
     color: '#fff',
     fontSize: 15,
     fontWeight: 'bold',
     marginBottom: 4,
   },
-  resultDesc: {
+  menuItemRestaurant: {
     color: '#888',
     fontSize: 13,
+    marginBottom: 4,
   },
-  resultRight: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  resultType: {
-    fontSize: 18,
-  },
-  resultRating: {
-    color: '#aaa',
-    fontSize: 13,
-  },
-  noResults: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  noResultsEmoji: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  noResultsText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  noResultsSubtext: {
-    color: '#888',
+  menuItemPrice: {
+    color: '#6C63FF',
     fontSize: 14,
+    fontWeight: 'bold',
   },
 });

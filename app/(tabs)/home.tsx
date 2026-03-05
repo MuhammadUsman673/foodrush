@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, TextInput
+  TouchableOpacity, TextInput, ActivityIndicator, BackHandler
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { supabase } from '../../lib/supabase';
 
 const categories = [
   { id: '1', name: 'Pizza', emoji: '🍕' },
@@ -14,47 +16,37 @@ const categories = [
   { id: '6', name: 'Dessert', emoji: '🍰' },
 ];
 
-const restaurants = [
-  {
-    id: '1',
-    name: 'Pizza Palace',
-    cuisine: 'Italian • Pizza',
-    rating: '4.8',
-    time: '20-30 min',
-    emoji: '🍕',
-    color: '#FF6584',
-  },
-  {
-    id: '2',
-    name: 'Burger Barn',
-    cuisine: 'American • Burgers',
-    rating: '4.6',
-    time: '15-25 min',
-    emoji: '🍔',
-    color: '#6C63FF',
-  },
-  {
-    id: '3',
-    name: 'Sushi Star',
-    cuisine: 'Japanese • Sushi',
-    rating: '4.9',
-    time: '25-35 min',
-    emoji: '🍱',
-    color: '#43C6AC',
-  },
-  {
-    id: '4',
-    name: 'Taco Town',
-    cuisine: 'Mexican • Tacos',
-    rating: '4.7',
-    time: '10-20 min',
-    emoji: '🌮',
-    color: '#FFB347',
-  },
-];
-
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const [restaurants, setRestaurants] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadRestaurants();
+  }, []);
+
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      return true; // Prevent quitting on home tab
+    });
+    return () => backHandler.remove();
+  }, []);
+
+  const loadRestaurants = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('restaurants')
+        .select('*')
+        .order('rating', { ascending: false });
+
+      if (error) throw error;
+      setRestaurants(data || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <ScrollView
@@ -68,20 +60,20 @@ export default function HomeScreen() {
           <Text style={styles.greeting}>Good Morning 👋</Text>
           <Text style={styles.name}>What are you craving?</Text>
         </View>
-        <TouchableOpacity style={styles.avatar}>
+        <TouchableOpacity
+          style={styles.avatar}
+          onPress={() => router.push('/(tabs)/profile' as any)}>
           <Text style={styles.avatarText}>U</Text>
         </TouchableOpacity>
       </View>
 
       {/* Search Bar */}
-      <View style={styles.searchContainer}>
+      <TouchableOpacity
+        style={styles.searchContainer}
+        onPress={() => router.push('/(tabs)/search' as any)}>
         <Text style={styles.searchIcon}>🔍</Text>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search food or restaurant..."
-          placeholderTextColor="#555"
-        />
-      </View>
+        <Text style={styles.searchPlaceholder}>Search food or restaurant...</Text>
+      </TouchableOpacity>
 
       {/* Banner */}
       <View style={styles.banner}>
@@ -99,7 +91,10 @@ export default function HomeScreen() {
       <Text style={styles.sectionTitle}>Categories</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesRow}>
         {categories.map((cat) => (
-          <TouchableOpacity key={cat.id} style={styles.categoryCard}>
+          <TouchableOpacity
+            key={cat.id}
+            style={styles.categoryCard}
+            onPress={() => router.push('/(tabs)/search' as any)}>
             <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
             <Text style={styles.categoryName}>{cat.name}</Text>
           </TouchableOpacity>
@@ -108,26 +103,31 @@ export default function HomeScreen() {
 
       {/* Restaurants */}
       <Text style={styles.sectionTitle}>Popular Restaurants</Text>
-      {restaurants.map((r) => (
-        <TouchableOpacity
-          key={r.id}
-          style={styles.restaurantCard}
-          onPress={() => router.push(`/restaurant/${r.id}` as any)}>
-          <View style={[styles.restaurantImage, { backgroundColor: r.color + '33' }]}>
-            <Text style={styles.restaurantEmoji}>{r.emoji}</Text>
-          </View>
-          <View style={styles.restaurantInfo}>
-            <Text style={styles.restaurantName}>{r.name}</Text>
-            <Text style={styles.restaurantCuisine}>{r.cuisine}</Text>
-            <View style={styles.restaurantMeta}>
-              <Text style={styles.metaText}>⭐ {r.rating}</Text>
-              <Text style={styles.metaDot}>•</Text>
-              <Text style={styles.metaText}>🕐 {r.time}</Text>
+
+      {loading ? (
+        <ActivityIndicator size="large" color="#6C63FF" style={{ marginTop: 20 }} />
+      ) : (
+        restaurants.map((r) => (
+          <TouchableOpacity
+            key={r.id}
+            style={styles.restaurantCard}
+            onPress={() => router.push(`/restaurant/${r.id}` as any)}>
+            <View style={[styles.restaurantImage, { backgroundColor: r.color + '33' }]}>
+              <Text style={styles.restaurantEmoji}>{r.emoji}</Text>
             </View>
-          </View>
-          <Text style={styles.arrow}>›</Text>
-        </TouchableOpacity>
-      ))}
+            <View style={styles.restaurantInfo}>
+              <Text style={styles.restaurantName}>{r.name}</Text>
+              <Text style={styles.restaurantCuisine}>{r.cuisine}</Text>
+              <View style={styles.restaurantMeta}>
+                <Text style={styles.metaText}>⭐ {r.rating}</Text>
+                <Text style={styles.metaDot}>•</Text>
+                <Text style={styles.metaText}>🕐 {r.time}</Text>
+              </View>
+            </View>
+            <Text style={styles.arrow}>›</Text>
+          </TouchableOpacity>
+        ))
+      )}
 
       <View style={{ height: 20 }} />
     </ScrollView>
@@ -174,6 +174,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E1E2E',
     borderRadius: 14,
     paddingHorizontal: 16,
+    paddingVertical: 14,
     marginBottom: 20,
     borderWidth: 1,
     borderColor: '#2E2E3E',
@@ -182,10 +183,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginRight: 10,
   },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 14,
-    color: '#fff',
+  searchPlaceholder: {
+    color: '#555',
     fontSize: 15,
   },
   banner: {

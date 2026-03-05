@@ -1,13 +1,13 @@
 import { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { router } from 'expo-router';
+import { supabase } from '../lib/supabase';
 
 export default function SplashScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
 
   useEffect(() => {
-    // Fade + scale in
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -22,9 +22,13 @@ export default function SplashScreen() {
       }),
     ]).start();
 
-    // Navigate to onboarding after 3 seconds
-    const timer = setTimeout(() => {
-      router.replace('/onboarding');
+    const timer = setTimeout(async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        router.replace('/(tabs)/home' as any);
+      } else {
+        router.replace('/onboarding');
+      }
     }, 3000);
 
     return () => clearTimeout(timer);
@@ -37,17 +41,13 @@ export default function SplashScreen() {
           styles.logoContainer,
           { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
         ]}>
-        {/* Logo Circle */}
         <View style={styles.logoCircle}>
           <Text style={styles.logoEmoji}>🍕</Text>
         </View>
-
-        {/* App Name */}
         <Text style={styles.appName}>FoodRush</Text>
         <Text style={styles.tagline}>Delicious food, delivered fast</Text>
       </Animated.View>
 
-      {/* Bottom loader */}
       <Animated.View style={[styles.bottom, { opacity: fadeAnim }]}>
         <Text style={styles.bottomText}>Loading...</Text>
       </Animated.View>
